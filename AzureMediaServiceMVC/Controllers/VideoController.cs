@@ -24,6 +24,7 @@ namespace AzureMediaServiceMVC.Controllers
 {
     public class VideoController : Controller
     {
+        //vedio db
         private AzureMediaServicesContext db = new AzureMediaServicesContext();
         private static readonly bool useAESRestriction = false;
 
@@ -193,7 +194,9 @@ namespace AzureMediaServiceMVC.Controllers
 
         private IAsset CreateMediaAsset(CloudFile model)
         {
+            //Create instance of the CloudStorageAccount, this is the storage account associated with the Media Service.
             CloudStorageAccount storageAccount = CloudStorageAccount.Parse(mediaServiceStorageConnectionString);
+            //Create a Storage Client instance from where we need to copy the file
             CloudBlobClient cloudBlobClient = storageAccount.CreateCloudBlobClient();
             CloudBlobContainer mediaBlobContainer = cloudBlobClient.GetContainerReference(mediaServiceStorageContainerReference);
 
@@ -202,17 +205,19 @@ namespace AzureMediaServiceMVC.Controllers
             // Create a new asset.
             IAsset asset = context.Assets.Create("UploadedVideo-" + Guid.NewGuid().ToString().ToLower(), AssetCreationOptions.None);
             IAccessPolicy writePolicy = context.AccessPolicies.Create("writePolicy", TimeSpan.FromMinutes(120), AccessPermissions.Write);
+            // Create a Destination Location in the Media Service and get the blob handle of the destination file (blob).
             ILocator destinationLocator = context.Locators.CreateLocator(LocatorType.Sas, asset, writePolicy);
 
             // Get the asset container URI and copy blobs from mediaContainer to assetContainer.
             Uri uploadUri = new Uri(destinationLocator.Path);
             string assetContainerName = uploadUri.Segments[1];
             CloudBlobContainer assetContainer = cloudBlobClient.GetContainerReference(assetContainerName);
+            //Get Blob handle of the Source File
             string fileName = HttpUtility.UrlDecode(Path.GetFileName(model.BlockBlob.Uri.AbsoluteUri));
 
             var sourceCloudBlob = mediaBlobContainer.GetBlockBlobReference(fileName);
             sourceCloudBlob.FetchAttributes();
-
+            // Check for rudimentary properties to ensure the source file is valid and then create the file in the designation. Initiate copy from Blob.
             if (sourceCloudBlob.Properties.Length > 0)
             {
                 IAssetFile assetFile = asset.AssetFiles.Create(fileName);
@@ -224,7 +229,8 @@ namespace AzureMediaServiceMVC.Controllers
                 if (sourceCloudBlob.Properties.Length != destinationBlob.Properties.Length)
                     model.UploadStatusMessage += "Failed to copy as Media Asset!";
             }
-            destinationLocator.Delete();
+            //Once the copy is done delete the destination locator and the write policy.
+           destinationLocator.Delete();
             writePolicy.Delete();
             sourceCloudBlob.Delete();  //delete temp blob
 
@@ -242,10 +248,11 @@ namespace AzureMediaServiceMVC.Controllers
         }
 
         [HttpPost]
+        // Encode and generate the thumbnails.
         public ActionResult EncodeToAdaptiveBitrateMP4s(string assetId)
         {
             // Note: You need atleast 1 reserve streaming unit for dynamic packaging of encoded media. If you don't have that, you can't see video file playing.
-
+            //get asset mn el table
             IAsset inputAsset = GetAssetById(assetId);
             string token = string.Empty;
             string uploadFileOriginalName = string.Empty;
@@ -262,10 +269,17 @@ namespace AzureMediaServiceMVC.Controllers
 
             //// XML Preset
             IJob job = context.Jobs.Create(inputAsset.Name);
+            // Get a media processor reference, and pass to it the name of the 
+            // processor to use for the specific task.
             IMediaProcessor processor = GetLatestMediaProcessorByName("Media Encoder Standard");
             string configuration = System.IO.File.ReadAllText(HttpContext.Server.MapPath("~/MediaServicesCustomPreset.xml"));
             ITask task = job.Tasks.AddNew(inputAsset.Name + "- encoding task", processor, configuration, TaskOptions.None);
+
+            // Specify the input asset to be encoded.
             task.InputAssets.Add(inputAsset);
+            // Add an output asset to contain the results of the job. 
+            // This output is specified as AssetCreationOptions.None, which 
+            // means the output asset is not encrypted. 
             task.OutputAssets.AddNew(inputAsset.Name + "-Adaptive-Bitrate-MP4", AssetCreationOptions.None);
             job.Submit();
             IAsset encodedAsset = job.OutputMediaAssets[0];
@@ -365,7 +379,8 @@ namespace AzureMediaServiceMVC.Controllers
             contentKey.AuthorizationPolicyId = policy.Id;
             IContentKey updatedKey = contentKey.UpdateAsync().Result;
         }
-
+        // Create the content key policy that configures how the content key is delivered to end clients
+        // via the Key Delivery component of Azure Media Services.
         static public IContentKey CreateEnvelopeTypeContentKey(IAsset asset)
         {
             // Create envelope encryption content key
@@ -491,6 +506,8 @@ namespace AzureMediaServiceMVC.Controllers
 
         private static IMediaProcessor GetLatestMediaProcessorByName(string mediaProcessorName)
         {
+            // Get a media processor reference, and pass to it the name of the 
+            // processor to use for the specific task.
             var processor = context.MediaProcessors.Where(p => p.Name == mediaProcessorName).
             ToList().OrderBy(p => new Version(p.Version)).LastOrDefault();
 
@@ -630,5 +647,5 @@ namespace AzureMediaServiceMVC.Controllers
             }
             base.Dispose(disposing);
         }
-    }
+  
 }

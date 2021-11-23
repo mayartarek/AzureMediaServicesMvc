@@ -15,6 +15,7 @@ namespace AzureMediaServiceMVC.Models.Azure
         //private static readonly CloudMediaContext context = new CloudMediaContext(new MediaServicesCredentials(mediaAccountName, mediaAccountKey));
 
         //// Azure Active Directory (AAD)
+        ///// // Read values from the App.config file.
         private static readonly string mediaServiceADTenantDomain = ConfigurationManager.AppSettings["MediaServiceADTenantDomain"];
         private static readonly string mediaServiceADRestApiEndpoint = ConfigurationManager.AppSettings["MediaServiceADRestApiEndpoint"];
         private static readonly string mediaServiceADApplicationId = ConfigurationManager.AppSettings["MediaServiceADApplicationId"];
@@ -64,13 +65,17 @@ namespace AzureMediaServiceMVC.Models.Azure
 
         public static string GetEncodingJobStatus(string jobId)
         {
+            // Create a Stringbuilder to store the list that we build.
             StringBuilder builder = new StringBuilder();
             var jobInstance = from j in context.Jobs where j.Id == jobId select j;
             IJob job = jobInstance.FirstOrDefault();
+            // Display the collection of jobs on the server.
 
             if (job.State == JobState.Error)
             {
                 builder.Append("Error Details: \n");
+                // For each job, display the associated tasks (a job  
+                // has one or more tasks). 
                 foreach (ITask task in job.Tasks)
                 {
                     foreach (ErrorDetail detail in task.ErrorDetails)
@@ -88,6 +93,9 @@ namespace AzureMediaServiceMVC.Models.Azure
 
         private static IAsset GetAssetById(string assetId)
         {
+            // Reference the asset as an IAsset.
+            // Use a LINQ Select query to get an asset.
+
             IAsset theAsset = (from a in context.Assets
                                where a.Id == assetId
                                select a).FirstOrDefault();
